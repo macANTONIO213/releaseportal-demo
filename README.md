@@ -28,6 +28,12 @@ pnpm run test:sites
 
 ## Demo boundaries
 
+The approved initial owner launch uses `PORTAL_OWNER_SIGNIN_ONLY=1` with only
+GitHub user ID284642046 (macANTONIO213) and no reviewer IDs. It retains real GitHub
+App sign-in, public HTTPS and PostgreSQL requirements. Release approval remains
+unavailable, including for stored users with a former reviewer role. Assign an
+independent reviewer and turn off this mode before enabling release review.
+
 Public hosting requires a real HTTPS hostname, trusted proxy ranges, PostgreSQL with verified TLS, persistent artifact storage, GitHub App configuration and approved numeric developer/reviewer identities. GitHub CLI authentication used to publish this repository is separate from the GitHub App authorization used by portal users.
 
 Repository execution requires a reviewed Linux sandbox and restricted egress. The retained pipeline is a Django-layout draft, not a universal build system. Browser cookies are never reused as API credentials. Password and legacy CI modules remain for compatibility tests; the active frontend uses GitHub authorization.

@@ -25,7 +25,8 @@ def session(request):
     capability = request.session.get('github_capability', '')
     valid = member and role_for(member) and github_tokens.get(capability, request.user.id)
     return JsonResponse({'csrf':get_token(request),'mode':'local' if settings.LOCAL else 'pilot', 'auth_method':'github',
-        'ingress_mode':settings.INGRESS_MODE, 'github_configured':github.configured(), 'user':{'id':request.user.id,'name':member.github_login,'role':role_for(member)} if valid else None})
+        'ingress_mode':settings.INGRESS_MODE, 'owner_signin_only':settings.OWNER_SIGNIN_ONLY,
+        'github_configured':github.configured(), 'user':{'id':request.user.id,'name':member.github_login,'role':role_for(member)} if valid else None})
 
 @require_GET
 def sign_in(request):

@@ -28,6 +28,30 @@ def archive(members):
             result.addfile(member,io.BytesIO(content))
     return buffer.getvalue()
 
+class OwnerSigninTests(SimpleTestCase):
+    def test_only_approved_owner_is_accepted(self):
+        from .public_identity import validate_public_identities
+        validate_public_identities({'284642046'}, set(), True)
+
+    def test_owner_mode_rejects_another_identity_or_review_privilege(self):
+        from .public_identity import validate_public_identities
+        from django.core.exceptions import ImproperlyConfigured
+        for allowed, reviewers in [({'9'}, set()), ({'284642046','9'},set()), ({'284642046'},{'284642046'})]:
+            with self.assertRaises(ImproperlyConfigured):
+                validate_public_identities(allowed, reviewers, True)
+
+    def test_default_mode_still_requires_independent_reviewer(self):
+        from .public_identity import validate_public_identities
+        from django.core.exceptions import ImproperlyConfigured
+        with self.assertRaises(ImproperlyConfigured):
+            validate_public_identities({'284642046'},set())
+
+    @override_settings(AUTH_MODE='github',PUBLIC=True,GITHUB_ALLOWED_USER_IDS={'284642046'},GITHUB_REVIEWER_IDS=set())
+    def test_stored_reviewer_role_does_not_grant_owner_approval(self):
+        from .roles import role_for
+        member=Member(github_id=284642046,role='reviewer')
+        self.assertEqual(role_for(member),'developer')
+
 class SourceTests(SimpleTestCase):
     def test_repository_url_normalization_and_org(self):
         self.assertEqual(parse_repository('https://github.com/macANTONIO213/example.git'),'macANTONIO213/example')

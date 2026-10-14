@@ -1,5 +1,10 @@
 # Demo workspace instructions
 
+15 October 2026: user chose owner sign-in first for macANTONIO213, with release
+approval unavailable until an independent reviewer is assigned. Explicit
+PORTAL_OWNER_SIGNIN_ONLY permits only approved GitHub ID284642046, no reviewers;
+preserve real GitHub App authorization and all execution/deployment gates.
+
 Read README.md first. This is a separate public-demo source copy. Install dependencies from its own lock files; do not depend on neighboring workspaces or runtime data. Keep credentials and generated files out of Git. Pass -PythonExe explicitly to Windows helpers.
 
 Keep GitHub authorization, independent review, exact artifact binding and HTTPS-only credential handling. Repository execution and AWS application deployment remain disabled until real runtime/target adapters are reviewed. Do not use the mock AWS target or stub script as a deployment target. Public hosting and account/resource changes require a concrete approved demo plan; no permission probes or automatic fallback to another account.

@@ -126,8 +126,12 @@ GITHUB_REDIRECT_URI = os.environ.get('PORTAL_GITHUB_REDIRECT_URI', '')
 GITHUB_ORGANIZATIONS = os.environ.get('PORTAL_GITHUB_ORGS', 'macANTONIO213').split(',')
 GITHUB_REVIEWER_IDS = set(os.environ.get('PORTAL_GITHUB_REVIEWER_IDS', '').split(',')) - {''}
 GITHUB_ALLOWED_USER_IDS = set(os.environ.get('PORTAL_GITHUB_ALLOWED_USER_IDS', '').split(',')) - {''}
-if PUBLIC and (len(GITHUB_ALLOWED_USER_IDS) < 2 or not GITHUB_REVIEWER_IDS or not GITHUB_REVIEWER_IDS <= GITHUB_ALLOWED_USER_IDS):
-    raise ImproperlyConfigured('Public hosting requires approved GitHub user IDs and independent reviewer IDs.')
+OWNER_SIGNIN_ONLY = os.environ.get('PORTAL_OWNER_SIGNIN_ONLY') == '1'
+if OWNER_SIGNIN_ONLY and not PUBLIC:
+    raise ImproperlyConfigured('Owner sign-in is an explicit public-hosting mode.')
+if PUBLIC:
+    from portal.public_identity import validate_public_identities
+    validate_public_identities(GITHUB_ALLOWED_USER_IDS, GITHUB_REVIEWER_IDS, OWNER_SIGNIN_ONLY)
 if any(not value.isdigit() for value in GITHUB_ALLOWED_USER_IDS):
     raise ImproperlyConfigured('GitHub allowed user IDs must be numeric.')
 if any(not value.isdigit() for value in GITHUB_REVIEWER_IDS):
