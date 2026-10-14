@@ -1,0 +1,15 @@
+node_modules
+dist
+.runtime
+.git
+.env
+.env.*
+*.sqlite3
+__pycache__
+*.pyc
+docs
+.venv
+prepared-releaseportal
+coverage
+*.dpapi
+*.log

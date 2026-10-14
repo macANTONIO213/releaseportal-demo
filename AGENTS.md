@@ -1,0 +1,7 @@
+# Demo workspace instructions
+
+Read README.md first. This is a separate public-demo source copy. Install dependencies from its own lock files; do not depend on neighboring workspaces or runtime data. Keep credentials and generated files out of Git. Pass -PythonExe explicitly to Windows helpers.
+
+Keep GitHub authorization, independent review, exact artifact binding and HTTPS-only credential handling. Repository execution and AWS application deployment remain disabled until real runtime/target adapters are reviewed. Do not use the mock AWS target or stub script as a deployment target. Public hosting and account/resource changes require a concrete approved demo plan; no permission probes or automatic fallback to another account.
+
+Administrator policy may block browser access or preview. Do not bypass it using another surface, command or tunnel. UI source belongs in src/. Preserve the Sites packaging files .openai/hosting.json, worker/index.js, scripts/prepare-sites-build.mjs and tests/sites-worker.test.mjs. Before a Sites handoff run pnpm run build and pnpm run test:sites; do not publish without authorization for the intended destination.

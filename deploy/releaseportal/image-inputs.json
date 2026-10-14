@@ -1,0 +1,13 @@
+{
+  "node": {
+    "tag": "22-bookworm-slim",
+    "digest": "sha256:efd0ab5780c2d9ab1f0f869571a00d5edb17793bff4cce4a2792e3eb0ffc7562",
+    "platform": "linux/amd64"
+  },
+  "python": {
+    "tag": "3.12-slim",
+    "digest": "sha256:2b4f19dae3a777dfc3b76730bda1e82e1f66ab2a2686fa93ca78edbfb4f04ffe",
+    "platform": "linux/amd64"
+  },
+  "rds_ca_sha256": "3c696020a3b7c6721085d182211c28024ab01873ade35dcc7eeebb89c20ee979"
+}
