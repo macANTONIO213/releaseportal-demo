@@ -10,11 +10,16 @@ COPY worker ./worker
 COPY .openai ./.openai
 RUN pnpm run build
 
-FROM python:3.12-slim@sha256:2b4f19dae3a777dfc3b76730bda1e82e1f66ab2a2686fa93ca78edbfb4f04ffe
+FROM python:3.12-alpine3.23@sha256:9ce5a4e59b833c002e1c4196c60ec0b38977e3235d626298ba7ffe2e64f5a30c
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORTAL_MODE=pilot PORTAL_RUNTIME_DIR=/var/lib/releaseportal PORTAL_BIND_HOST=0.0.0.0
 WORKDIR /app
 COPY backend/requirements.lock.txt ./backend/requirements.lock.txt
-RUN pip install --no-cache-dir -r backend/requirements.lock.txt && useradd --uid 10001 --create-home portal && mkdir /var/lib/releaseportal && chown portal:portal /var/lib/releaseportal
+RUN sed -i 's|http://|https://|g' /etc/apk/repositories \
+    && apk upgrade --no-cache \
+    && apk add --no-cache 'zlib>=1.3.2-r1' 'musl>=1.2.5-r23' libgcc \
+    && pip install --no-cache-dir --only-binary=:all: -r backend/requirements.lock.txt \
+    && addgroup -g 10001 portal && adduser -D -u 10001 -G portal portal \
+    && mkdir /var/lib/releaseportal && chown portal:portal /var/lib/releaseportal
 COPY backend ./backend
 COPY scripts/serve.py ./scripts/serve.py
 COPY deploy ./deploy
