@@ -64,3 +64,20 @@ schema/dependency changes until a new profile is reviewed. Public execution
 flags remain blocked until the additional infrastructure and integration are
 implemented, approved and accepted. Do not flip environment flags to skip that
 work.
+
+The disabled external-controller draft now includes signed expiring approval
+snapshots, durable replay/uncertainty receipts, private certificate-verified TLS,
+and an AWS CLI image-update core that discards ambient operator credentials.
+Submission alone is never success: the controller checks the exact ECS revision,
+completed rollout and HTTPS health. Private object/queue adapters accept closed
+job schemas and bounded artifacts. The COPY-only assembler verifies source,
+dependency and migration hashes; it never runs a repository Dockerfile.
+
+These components are not connected to the live request/worker paths. The new
+scanner recipe and upstream runtime pins have not passed a Linux build or
+isolation acceptance. Local source scanning also has findings awaiting explicit
+review; startup guards remain unchanged. Do not interpret passing contract tests
+as a completed deployment or enable these drafts by changing an environment flag.
+
+Source normalization omits only the exact reviewed blank `.env.example` template.
+A changed template, actual `.env`, key, PEM or database file remains rejected.

@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 
-from .services import RuleError
+from .errors import RuleError
 
 
 def fingerprint(value):

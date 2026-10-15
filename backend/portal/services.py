@@ -5,13 +5,10 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 from .models import Event, Release, Run
+from .errors import RuleError
 
 PROJECT = {'name': 'Demo application', 'repository': 'macANTONIO213/releaseportal-demo',
            'branch': 'develop', 'environment': 'Development', 'account': '111122223333', 'region': 'ap-southeast-1'}
-
-class RuleError(Exception):
-    def __init__(self, code, message, status=409):
-        self.code, self.message, self.status = code, message, status
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()

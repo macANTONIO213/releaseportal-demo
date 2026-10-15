@@ -5,6 +5,10 @@ from pathlib import Path, PurePosixPath
 from django.conf import settings
 from .services import RuleError
 
+# The published blank configuration template is not runtime input. Omit only
+# these exact reviewed bytes; modified examples still fail the credential-file gate.
+EMPTY_TEMPLATE_SHA256 = 'e4412738bdc4b56fbbb4176eb4b0c47329b543bf2ad339a497c1480343b15079'
+
 def normalized_archive(data):
     output = io.BytesIO()
     size, count, paths = 0, 0, set()
@@ -23,6 +27,11 @@ def normalized_archive(data):
                     continue
                 if not member.isfile() or str(relative) in paths:
                     raise ValueError()
+                if str(relative) == '.env.example' and member.size <= 65536:
+                    template = incoming.extractfile(member).read(65537)
+                    if hashlib.sha256(template.replace(b'\r\n', b'\n')).hexdigest() == EMPTY_TEMPLATE_SHA256:
+                        paths.add(str(relative))
+                        continue
                 if any(p in ['.git', '.venv', 'venv', 'node_modules', 'media'] for p in relative.parts) or relative.name.startswith('.env') or relative.suffix in ['.sqlite3','.pem','.key']:
                     raise RuleError('source_contains_data', 'Remove credential/data files before building.')
                 size += member.size
