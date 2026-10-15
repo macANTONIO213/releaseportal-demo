@@ -12,8 +12,9 @@
   },
   "source_lock_sha256": {
     "backend/requirements.lock.txt": "86d418edc28287cdf9636d38595f69ecd4142ac20ff45a4515bc00ea32b0443f",
-    "pnpm-lock.yaml": "ecd4e1f3346ddec76f14f99fa8745baa7b203559b47dce71546f6505b3db8447",
-    "package.json": "4acaf6c87c6fe74df641b5a15ea920f8ba6ad5f376191c3104be16f0565cdf3a"
+    "pnpm-lock.yaml": "e90acb79940020fbb9d6a03d1b808aa8205019263441155d05ff6b5e95d6174a",
+    "package.json": "d3c84a959bccb44e0307f32e3f0801bac363f97da971a5e40413f77b0c36d968",
+    "pnpm-workspace.yaml": "ac02d96368617c760f093cfe61fdec64b6244007ab3553e0d6621f706f54a353"
   },
   "migration_manifest_sha256": "e1352ca5af61afdb1cd801d233bb97eb77496c3ce8bc116b1b7aeadbe70e0557",
   "required_stages": [
@@ -46,5 +47,8 @@
     "test:sites"
   ],
   "execution_enabled": false,
-  "deployment_scope": "existing ECS service image only; lockfile or migration changes require a newly reviewed profile"
+  "deployment_scope": "existing ECS service image only; lockfile or migration changes require a newly reviewed profile",
+  "source_template_sha256": {
+    ".env.example": "e4412738bdc4b56fbbb4176eb4b0c47329b543bf2ad339a497c1480343b15079"
+  }
 }

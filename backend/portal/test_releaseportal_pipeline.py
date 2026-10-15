@@ -15,6 +15,41 @@ spec.loader.exec_module(pipeline)
 
 
 class ReleasePortalPipelineTests(SimpleTestCase):
+    def test_secret_dispositions_require_exact_file_and_finding(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            source=Path(temporary);path=source/'lock.txt';path.write_bytes(b'public checksum fixture\n')
+            finding={'type':'Hex High Entropy String','line_number':1,'hashed_secret':'a'*40}
+            review={'path':'lock.txt','file_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+                'type':finding['type'],'line':1,'hashed_secret':finding['hashed_secret'],
+                'disposition':'reviewed_false_positive','reason':'Public package integrity checksum; no authentication capability.'}
+            report={'plugins_used':[{'name':'HexHighEntropyString'}],'results':{'lock.txt':[finding]}}
+            self.assertEqual(pipeline.secret_findings(report,source,[review]),
+                {'findings':0,'reviewed_findings':1,'total_findings':1})
+            finding['hashed_secret']='b'*40
+            self.assertEqual(pipeline.secret_findings(report,source,[review])['findings'],1)
+            finding['hashed_secret']='a'*40;path.write_bytes(b'changed fixture\n')
+            self.assertEqual(pipeline.secret_findings(report,source,[review])['findings'],1)
+            with self.assertRaises(pipeline.PipelineStopped):
+                pipeline.secret_findings({'plugins_used':[],'results':{}},source,[review])
+
+    def test_source_dispositions_are_exact_file_bound_and_never_cover_high_findings(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'backend').mkdir();path=root/'backend/example.py';path.write_bytes(b'import subprocess\n')
+            finding={'filename':'backend/example.py','test_id':'B404','line_number':1,'issue_severity':'LOW'}
+            review={'path':'backend/example.py','test_id':'B404','line':1,'severity':'LOW',
+                'file_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'disposition':'reviewed_false_positive',
+                'reason':'Import only; fixed reviewed subprocess boundary, no shell or user command text.'}
+            report={'results':[finding],'errors':[]}
+            self.assertEqual(pipeline.source_findings(report,root,[review]),{'findings':0,'reviewed_findings':1,'total_findings':1})
+            path.write_bytes(b'import subprocess\n# changed\n')
+            self.assertEqual(pipeline.source_findings(report,root,[review])['findings'],1)
+            finding['issue_severity']='HIGH'
+            self.assertEqual(pipeline.source_findings(report,root,[review])['reviewed_findings'],0)
+            with self.assertRaises(pipeline.PipelineStopped):
+                pipeline.source_findings({'results':[],'errors':['scan failed']},root,[review])
+
     def extract(self, name='backend/manage.py', kind=tarfile.REGTYPE, link=''):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary)

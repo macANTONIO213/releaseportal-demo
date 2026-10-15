@@ -5,8 +5,8 @@ from pathlib import Path, PurePosixPath
 from django.conf import settings
 from .services import RuleError
 
-# The published blank configuration template is not runtime input. Omit only
-# these exact reviewed bytes; modified examples still fail the credential-file gate.
+# Only the published blank configuration template is permitted; modified
+# examples still fail the credential-file gate.
 EMPTY_TEMPLATE_SHA256 = 'e4412738bdc4b56fbbb4176eb4b0c47329b543bf2ad339a497c1480343b15079'
 
 def normalized_archive(data):
@@ -27,12 +27,12 @@ def normalized_archive(data):
                     continue
                 if not member.isfile() or str(relative) in paths:
                     raise ValueError()
+                template_allowed=False
                 if str(relative) == '.env.example' and member.size <= 65536:
                     template = incoming.extractfile(member).read(65537)
                     if hashlib.sha256(template.replace(b'\r\n', b'\n')).hexdigest() == EMPTY_TEMPLATE_SHA256:
-                        paths.add(str(relative))
-                        continue
-                if any(p in ['.git', '.venv', 'venv', 'node_modules', 'media'] for p in relative.parts) or relative.name.startswith('.env') or relative.suffix in ['.sqlite3','.pem','.key']:
+                        template_allowed=True
+                if any(p in ['.git', '.venv', 'venv', 'node_modules', 'media'] for p in relative.parts) or (relative.name.startswith('.env') and not template_allowed) or relative.suffix in ['.sqlite3','.pem','.key']:
                     raise RuleError('source_contains_data', 'Remove credential/data files before building.')
                 size += member.size
                 count += 1
@@ -56,6 +56,10 @@ def directory(run):
 
 def save_snapshot(run, downloaded):
     content = normalized_archive(downloaded)
+    from . import remote_delivery
+    if remote_delivery.configured():
+        remote_delivery.enqueue(run, content)
+        return
     root = directory(run)
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     (root/'source.tar.gz').write_bytes(content)
@@ -63,6 +67,10 @@ def save_snapshot(run, downloaded):
     run.save(update_fields=['source_sha256'])
 
 def read_artifact(run):
+    from . import remote_delivery
+    if remote_delivery.configured():
+        _,storage,_=remote_delivery.adapters()
+        return storage.get(str(run.id),'release.tar.gz' if run.artifact_sha256 else 'source.tar.gz',run.artifact_sha256 or run.source_sha256)
     path = directory(run)/'source.tar.gz'
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 100*1024*1024:
         raise RuleError('artifact_missing', 'The source artifact is unavailable.')

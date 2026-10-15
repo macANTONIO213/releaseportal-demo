@@ -8,7 +8,7 @@ from django.http import JsonResponse, HttpResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import redirect
 from django.views.decorators.http import require_GET, require_POST
-from . import views, services, github, direct_worker
+from . import views, services, github, direct_worker, remote_delivery
 from .models import Member, Run, Release, Event
 from .memory import github_tokens
 from .source import save_snapshot, read_artifact
@@ -85,11 +85,19 @@ def dashboard(request):
         return views.dashboard.__wrapped__.__wrapped__(request)
     client = github.client_for(request)
     repositories = client.repositories()
+    if remote_delivery.configured():
+        remote_delivery.poll()
+        remote_delivery.poll_deployments()
     allowed_runs = Run.objects.filter(repository__in=repositories)
     allowed_releases = Release.objects.filter(run__repository__in=repositories)
     own_events = Event.objects.filter(actor=request.user).order_by('-id')[:100]
-    return JsonResponse({'project':services.PROJECT,'repositories':repositories,'pipeline_configured':direct_worker.configured(),
-        'deployment_configured':settings.AWS_DEPLOYMENT_ENABLED and settings.DEPLOYMENT_TEMPLATE_APPROVED,
+    project=services.PROJECT
+    if remote_delivery.configured():
+        profile=remote_delivery.config()['profile']
+        project={'name':'ReleasePortal','repository':profile['repository'],'branch':'main','environment':'Personal AWS demo',
+            'account':profile['account'],'region':profile['region']}
+    return JsonResponse({'project':project,'repositories':repositories,'pipeline_configured':remote_delivery.configured() or direct_worker.configured(),
+        'deployment_configured':remote_delivery.configured(deployment=True) or (settings.AWS_DEPLOYMENT_ENABLED and settings.DEPLOYMENT_TEMPLATE_APPROVED),
         'runs':[views.run_json(r) for r in allowed_runs.order_by('-created_at')[:100]],
         'releases':[views.release_json(r) for r in allowed_releases.order_by('-created_at')[:100]],
         'events':[{'action':e.action,'object_id':e.object_id,'created_at':e.created_at.isoformat(),'actor':e.actor_id,'detail':e.detail} for e in own_events]})
@@ -99,7 +107,7 @@ def dashboard(request):
 def create_run(request):
     if settings.AUTH_MODE != 'github':
         return views.create_run.__wrapped__.__wrapped__(request)
-    if not direct_worker.configured():
+    if not remote_delivery.configured() and not direct_worker.configured():
         raise services.RuleError('build_runtime_unconfigured','Configure the isolated build runtime before starting a pipeline.',503)
     payload = views.body(request)
     repository = github.parse_repository(payload.get('repository',''))
@@ -109,20 +117,25 @@ def create_run(request):
     key = uuid.UUID(payload.get('request_key',''))
     client = github.client_for(request)
     repository = client.repository(repository)['full_name']
+    if remote_delivery.configured() and repository != remote_delivery.config()['profile']['repository']:
+        raise services.RuleError('repository_unsupported','This repository needs a reviewed pipeline adapter.',400)
     old = Run.objects.filter(request_key=key).first()
     if old:
         if old.requester_id != request.user.id or old.repository != repository or old.commit != commit:
             raise services.RuleError('idempotency_conflict','This receipt belongs to another request.')
         return JsonResponse(views.run_json(old))
-    if Run.objects.filter(status__in=['fetching_source','queued','running']).count() >= 4:
+    if Run.objects.filter(status__in=['fetching_source','queued','trigger_pending','running','sync_required']).count() >= 4:
         raise services.RuleError('queue_full','Four pipelines are already active.')
     run = Run.objects.create(requester=request.user,repository=repository,commit=commit,request_key=key,status='fetching_source')
     try:
         save_snapshot(run,client.snapshot(repository,commit))
-        run.status='queued'
-        run.save(update_fields=['status'])
+        if not remote_delivery.configured():
+            run.status='queued'
+            run.save(update_fields=['status'])
         services.record(request.user,'direct_build_requested',run.id,repository=repository,commit=commit)
     except services.RuleError as error:
+        if error.code == 'remote_submission_unknown':
+            raise
         run.status,run.error_code='failed',error.code
         run.save(update_fields=['status','error_code'])
         raise
@@ -149,10 +162,14 @@ def action(request, release_id, action):
     release = Release.objects.select_related('run').get(pk=release_id)
     if settings.AUTH_MODE == 'github':
         visible(request,release.run.repository)
+        if release.plan.get('execution') == 'ecs-service-image-v1' and action in ['begin','result','reconcile']:
+            raise services.RuleError('controller_receipt_required','This release requires a verified controller receipt, not a manual outcome.')
         if action == 'deploy':
             member = Member.objects.get(user=request.user)
             if request.user.id != release.creator_id and role_for(member) != 'reviewer':
                 raise services.RuleError('forbidden','Only the release creator or a reviewer can execute this release.',403)
+            if remote_delivery.configured():
+                return JsonResponse(remote_delivery.deploy(request,release,views.body(request)),status=202)
             from .deployment import accept_deployment
             result = accept_deployment(request,release,views.body(request))
             return JsonResponse(result,status=202)

@@ -2,11 +2,16 @@
 
 Additional worker scope/allowance was explicitly approved on 15 October 2026 in
 the operator handoff, outside this public repository. New controller/object/queue
-and COPY-only assembly modules remain disabled drafts, with offline coverage.
-They are not wired into live views/worker or accepted on Linux. Retain all startup
+and COPY-only assembly modules now connect through an operator-configured remote
+adapter. They remain disabled until actual Linux and integration acceptance. Retain all startup
 guards, independent review, exact profile binding and fail-closed scanner gates.
 Do not bypass unresolved source findings or mistake scope approval for runtime
 acceptance. No AWS target/account assignments belong in this public source.
+
+For an independent user to authorize a personally owned GitHub App, its GitHub
+registration must be public. Portal access still requires the configured numeric
+identity allowlist and actual authorized repository access. Never bypass these
+checks to work around a GitHub authorization 404.
 
 15 October 2026 continuation: the user selected this repository for the first
 pipeline and updates to its existing personal portal. The user nominated

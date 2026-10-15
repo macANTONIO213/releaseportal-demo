@@ -64,10 +64,10 @@ class AssemblyTests(unittest.TestCase):
         with self.assertRaises(AssemblyRejected):
             context(self.source,archive(self.compiled),self.profile,'0'*64)
 
-    def test_only_exact_blank_env_example_is_omitted_from_normalized_source(self):
+    def test_only_exact_blank_env_example_is_permitted_in_normalized_source(self):
         from django.conf import settings
         template=(settings.BASE_DIR.parent/'.env.example').read_bytes()
         normalized=normalized_archive(archive({'repo/.env.example':template,'repo/backend/manage.py':b'# fixture'}))
-        self.assertEqual(set(members(normalized)),{'backend/manage.py'})
+        self.assertEqual(set(members(normalized,{'.env.example':hashlib.sha256(template.replace(b'\r\n',b'\n')).hexdigest()})),{'backend/manage.py','.env.example'})
         with self.assertRaises(RuleError):
             normalized_archive(archive({'repo/.env.example':template+b'NEW_VALUE=changed\n','repo/app.py':b''}))

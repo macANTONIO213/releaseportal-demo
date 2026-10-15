@@ -26,6 +26,7 @@ class Ledger:
             db.execute('CREATE TABLE IF NOT EXISTS attempts (release_id TEXT PRIMARY KEY, nonce TEXT UNIQUE NOT NULL, '
                        'plan_digest TEXT NOT NULL, status TEXT NOT NULL, code TEXT NOT NULL, image TEXT NOT NULL, '
                        'task_definition TEXT NOT NULL DEFAULT "")')
+            db.execute("UPDATE attempts SET status='reconciliation_required',code='controller_restarted' WHERE status IN ('accepted','updating')")
 
     @contextmanager
     def connect(self):
@@ -141,7 +142,7 @@ class Controller:
 
     def start(self, snapshot, signature, credentials, now=None):
         """Acknowledge durable claim before returning; deployment survives caller loss."""
-        cli, acquired, handed_off = None, False, False
+        cli, acquired, handed_off, claimed = None, False, False, False
         try:
             validate_snapshot(snapshot, signature, self.key, self.profile, now)
             if not self.profile.get('execution_enabled'):
@@ -151,6 +152,7 @@ class Controller:
             if not acquired:
                 raise RuleError('controller_busy', 'Another deployment is active.')
             self.ledger.claim(snapshot)
+            claimed=True
             accepted = self.ledger.get(snapshot['release_id'])
             def execute():
                 try:
@@ -168,6 +170,8 @@ class Controller:
         finally:
             credentials.clear()
             if not handed_off:
+                if claimed:
+                    self.ledger.set(snapshot['release_id'],'reconciliation_required','controller_start_unconfirmed')
                 if cli is not None:
                     cli.erase()
                 if acquired:

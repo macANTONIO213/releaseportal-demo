@@ -129,6 +129,25 @@ class ControllerTests(unittest.TestCase):
             self.submit(self.controller(health=lambda: False))
         self.assertEqual(self.ledger.get(self.snapshot['release_id'])['status'], 'reconciliation_required')
 
+    def test_thread_start_failure_retains_claim_and_erases_credentials(self):
+        from unittest.mock import patch
+        controller=self.controller();credentials=self.credentials()
+        with patch('portal.controller_runtime.threading.Thread.start',side_effect=RuntimeError('fixture')):
+            with self.assertRaises(RuntimeError):
+                controller.start(self.snapshot,sign(self.snapshot,self.key),credentials,now=1000)
+        self.assertEqual(credentials,{})
+        self.assertEqual(self.cli.env,{})
+        self.assertFalse(controller.lock.locked())
+        self.assertEqual(self.calls,[])
+        self.assertEqual(self.ledger.get(self.snapshot['release_id'])['code'],'controller_start_unconfirmed')
+
+    def test_restart_requires_reconciliation_of_durable_accepted_claim(self):
+        self.ledger.claim(self.snapshot)
+        restored=Ledger(self.path)
+        self.assertEqual(restored.get(self.snapshot['release_id'])['code'],'controller_restarted')
+        with self.assertRaises(RuleError):
+            restored.claim(self.snapshot)
+
     def test_extra_plan_metadata_cannot_be_persisted_even_with_valid_hmac(self):
         self.snapshot['plan']['secret'] = 'not-for-storage'
         self.snapshot['plan_digest'] = fingerprint(self.snapshot['plan'])

@@ -26,7 +26,8 @@ def read_json(path):
     return json.loads(path.read_text())
 
 
-def extract_source(archive, destination):
+def extract_source(archive, destination, templates=None):
+    templates=templates or {}
     total, names = 0, set()
     with tarfile.open(archive, 'r:gz') as incoming:
         for member in incoming:
@@ -39,7 +40,9 @@ def extract_source(archive, destination):
                 raise PipelineStopped()
             if any(part in ['.git', '.venv', 'node_modules', '__pycache__'] for part in name.parts):
                 raise PipelineStopped()
-            if name.name.startswith('.env') or name.suffix in ['.pem', '.key', '.sqlite3']:
+            if (name.name.startswith('.env') and str(name) not in templates) or name.suffix in ['.pem', '.key', '.sqlite3']:
+                raise PipelineStopped()
+            if name.parts[0] in ['.npmrc','.pnpmfile.cjs','pnpmfile.cjs','sitecustomize.py','usercustomize.py']:
                 raise PipelineStopped()
             names.add(member.name); total += member.size
             if len(names) > 10000 or total > 500 * 1024 * 1024:
@@ -51,6 +54,8 @@ def extract_source(archive, destination):
                 raise PipelineStopped()
             content = incoming.extractfile(member).read(member.size + 1)
             if len(content) != member.size:
+                raise PipelineStopped()
+            if str(name) in templates and hashlib.sha256(content.replace(b'\r\n',b'\n')).hexdigest()!=templates[str(name)]:
                 raise PipelineStopped()
             path.write_bytes(content)
     if not names:
@@ -81,6 +86,51 @@ def frontend_count(report):
     return sum(values[name] for name in ['info', 'low', 'moderate', 'high', 'critical'])
 
 
+def source_findings(report, source, reviewed):
+    """Keep all findings visible; dispositions match exact reviewed file bytes.
+
+    The disposition list comes from the read-only operator profile, never the
+    repository. A changed file invalidates every disposition for that file.
+    Repository nosec comments are ignored by the scanner.
+    """
+    results = report.get('results')
+    if not isinstance(results, list) or report.get('errors'):
+        raise PipelineStopped()
+    accepted = 0
+    for finding in results:
+        name = PurePosixPath(finding['filename'].replace('\\', '/').removeprefix('./'))
+        if name.is_absolute() or '..' in name.parts or not str(name).startswith(('backend/', 'scripts/')):
+            raise PipelineStopped()
+        file_sha = hashlib.sha256((source / str(name)).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+        matches = [r for r in reviewed if r.get('path') == str(name) and r.get('file_sha256') == file_sha and
+                   r.get('test_id') == finding['test_id'] and r.get('line') == finding['line_number'] and
+                   r.get('severity') == finding['issue_severity'] == 'LOW' and
+                   r.get('disposition') == 'reviewed_false_positive' and isinstance(r.get('reason'), str) and len(r['reason']) >= 30]
+        if len(matches) == 1:
+            accepted += 1
+    return {'findings': len(results) - accepted, 'reviewed_findings': accepted, 'total_findings': len(results)}
+
+
+def secret_findings(report, source, reviewed):
+    if not report.get('plugins_used') or not isinstance(report.get('results'),dict):
+        raise PipelineStopped()
+    total,accepted=0,0
+    for filename,findings in report['results'].items():
+        name=PurePosixPath(filename.replace('\\','/').removeprefix('./'))
+        if name.is_absolute() or '..' in name.parts or not isinstance(findings,list):
+            raise PipelineStopped()
+        file_sha=hashlib.sha256((source/str(name)).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
+        for finding in findings:
+            total+=1
+            matches=[r for r in reviewed if r.get('path')==str(name) and r.get('file_sha256')==file_sha and
+                r.get('line')==finding['line_number'] and r.get('type')==finding['type'] and
+                r.get('hashed_secret')==finding['hashed_secret'] and r.get('disposition')=='reviewed_false_positive' and
+                isinstance(r.get('reason'),str) and len(r['reason'])>=30]
+            if len(matches)==1:
+                accepted+=1
+    return {'findings':total-accepted,'reviewed_findings':accepted,'total_findings':total}
+
+
 def main():
     source, output, archive = Path('/work/app'), Path('/output'), Path('/input/source.tar.gz')
     stage, failed = 'profile', False
@@ -91,7 +141,7 @@ def main():
     # host configuration. The network/proxy restrictions are enforced externally.
     environment = {'PATH': os.environ['PATH'], 'HOME': '/work', 'TMPDIR': '/work/tmp',
         'PORTAL_MODE': 'local', 'PORTAL_RUNTIME_DIR': '/work/runtime',
-        'DJANGO_SETTINGS_MODULE': 'config.settings', 'PYTHONPATH': '/tools:/work/app/backend',
+        'DJANGO_SETTINGS_MODULE': 'config.settings', 'PYTHONPATH': '/tools',
         'PYTHONDONTWRITEBYTECODE': '1', 'CI': '1', 'AWS_EC2_METADATA_DISABLED': 'true'}
     for key in ['HTTP_PROXY', 'HTTPS_PROXY']:
         if os.environ.get(key):
@@ -110,7 +160,7 @@ def main():
         if report['source_sha256'] != os.environ.get('SOURCE_SHA256'):
             raise PipelineStopped()
         stage = 'source'
-        extract_source(archive, source)
+        extract_source(archive, source, profile.get('source_template_sha256',{}))
         before = {p.relative_to(source).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                   for p in source.rglob('*') if p.is_file()}
         if any(before.get(name) != sha for name, sha in profile['source_lock_sha256'].items()):
@@ -119,31 +169,33 @@ def main():
             raise PipelineStopped()
         stage = 'secret_scan'
         with Path('/work/secrets.json').open('w') as stream:
-            rc = subprocess.run(['detect-secrets', 'scan', '--no-verify', '--all-files', '.'], cwd=source, env=environment,
+            rc = subprocess.run(['detect-secrets', 'scan', '--no-verify', '--all-files',
+                '--disable-filter','detect_secrets.filters.allowlist.is_line_allowlisted','.'], cwd=source, env=environment,
                 stdout=stream, stderr=subprocess.DEVNULL, timeout=120).returncode
         secret = read_json(Path('/work/secrets.json'))
         if not secret.get('plugins_used') or not isinstance(secret.get('results'), dict):
             raise PipelineStopped()
-        count = sum(len(items) for items in secret['results'].values())
-        report['scans']['secrets'] = {'status': 'passed' if rc == count == 0 else 'failed', 'findings': count}
-        failed = failed or rc != 0 or count != 0
+        counts=secret_findings(secret,source,profile.get('reviewed_secret_findings',[]))
+        report['scans']['secrets'] = {'status': 'passed' if rc == counts['findings'] == 0 else 'failed', **counts}
+        failed = failed or rc != 0 or counts['findings'] != 0
         stage = 'dependencies_install'
         python = '/work/venv/bin/python'
-        if run('python', '-m', 'venv', '/work/venv') or run(python, '-m', 'pip', 'install',
+        if run('python', '-I', '-m', 'venv', '/work/venv') or run(python, '-I', '-m', 'pip', 'install',
                 '--only-binary=:all:', '-r', 'backend/requirements.lock.txt'):
             raise PipelineStopped()
         if run('pnpm', 'install', '--frozen-lockfile', '--ignore-scripts'):
             raise PipelineStopped()
         stage = 'source_scan'
-        rc = run('bandit', '-r', 'backend', 'scripts', '-f', 'json', '-o', '/work/source.json')
+        rc = run('bandit', '--ini', '/tools/bandit.ini', '--ignore-nosec', '-r', 'backend', 'scripts', '-f', 'json', '-o', '/work/source.json')
         finding = read_json(Path('/work/source.json'))
         if not isinstance(finding.get('results'), list) or finding.get('errors'):
             raise PipelineStopped()
-        count = len(finding['results'])
-        report['scans']['source'] = {'status': 'passed' if rc == 0 and count == 0 else 'failed', 'findings': count}
-        failed = failed or rc != 0 or count != 0
+        counts = source_findings(finding, source, profile.get('reviewed_source_findings', []))
+        passed = rc in [0, 1] and counts['findings'] == 0
+        report['scans']['source'] = {'status': 'passed' if passed else 'failed', **counts}
+        failed = failed or not passed
         stage = 'dependencies_scan'
-        python_rc = run('python', '-m', 'pip_audit', '--disable-pip', '--no-deps', '-r',
+        python_rc = run('python', '-I', '-m', 'pip_audit', '--disable-pip', '--no-deps', '-r',
             'backend/requirements.lock.txt', '-f', 'json', '-o', '/work/python-dependencies.json')
         with Path('/work/frontend-dependencies.json').open('w') as stream:
             node_rc = subprocess.run(['pnpm', 'audit', '--json'], cwd=source, env=environment,
@@ -152,10 +204,9 @@ def main():
         report['scans']['dependencies'] = {'status': 'passed' if python_rc == node_rc == count == 0 else 'failed', 'findings': count}
         failed = failed or python_rc != 0 or node_rc != 0 or count != 0
         stage = 'unit_tests'
-        if run(python, 'backend/manage.py', 'check'):
+        if run(python, '-I', '/tools/releaseportal_run_tests.py', 'check'):
             raise PipelineStopped()
-        rc = run(python, 'backend/manage.py', 'test', 'portal',
-            '--testrunner=releaseportal_test_runner.CountingRunner', '--verbosity=0')
+        rc = run(python, '-I', '/tools/releaseportal_run_tests.py', 'test')
         counts = read_json(output / 'django-tests.json')
         if any(type(counts.get(k)) is not int or counts[k] < 0 for k in ['passed', 'failed', 'skipped', 'total']):
             raise PipelineStopped()

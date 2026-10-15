@@ -11,7 +11,8 @@ class AssemblyRejected(Exception):
     pass
 
 
-def members(content):
+def members(content, templates=None):
+    templates=templates or {}
     if len(content) > 100*1024*1024:
         raise AssemblyRejected('compressed_archive_limit')
     result, total = {}, 0
@@ -21,7 +22,7 @@ def members(content):
             if (not item.isfile() or path.is_absolute() or '..' in path.parts or '\\' in item.name or
                 not path.parts or str(path) != item.name or item.name in result or
                 any(p in ['.git','.venv','venv','node_modules','media'] for p in path.parts) or
-                path.name.startswith('.env') or path.suffix in ['.key','.pem','.sqlite3']):
+                (path.name.startswith('.env') and item.name not in templates) or path.suffix in ['.key','.pem','.sqlite3']):
                 raise AssemblyRejected('unsafe_archive_member')
             total += item.size
             if total > 500*1024*1024 or item.size > 25*1024*1024 or len(result) >= 10000:
@@ -29,6 +30,8 @@ def members(content):
             data = archive.extractfile(item).read(item.size+1)
             if len(data) != item.size:
                 raise AssemblyRejected('truncated_archive')
+            if item.name in templates and hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()!=templates[item.name]:
+                raise AssemblyRejected('modified_environment_template')
             result[item.name] = data
     if not result:
         raise AssemblyRejected('empty_archive')
@@ -38,7 +41,8 @@ def members(content):
 def context(source, artifact, profile, artifact_sha256):
     if hashlib.sha256(artifact).hexdigest() != artifact_sha256:
         raise AssemblyRejected('artifact_digest_mismatch')
-    original, compiled = members(source), members(artifact)
+    templates=profile.get('source_template_sha256',{})
+    original, compiled = members(source,templates), members(artifact,templates)
     for name, data in original.items():
         if name.startswith('dist/') or compiled.get(name) != data:
             raise AssemblyRejected('source_artifact_mismatch')

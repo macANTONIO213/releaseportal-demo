@@ -1,5 +1,6 @@
 """Private object/queue adapters for the reviewed remote runner. Not activated by import."""
 import hashlib
+import base64
 import json
 import os
 from pathlib import Path
@@ -7,9 +8,22 @@ import re
 import subprocess
 import tempfile
 import uuid
+import zlib
 
 from .controller_contract import canonical, sign
 from .errors import RuleError
+
+
+def decode_configuration(value):
+    if not isinstance(value,str) or len(value.encode())>1024*1024:
+        raise ValueError('Invalid configuration size')
+    if value.startswith('zlib:'):
+        decoder=zlib.decompressobj()
+        raw=decoder.decompress(base64.b64decode(value[5:],validate=True),1024*1024+1)
+        if len(raw)>1024*1024 or not decoder.eof or decoder.unconsumed_tail or decoder.unused_data:
+            raise ValueError('Invalid compressed configuration')
+        return json.loads(raw)
+    return json.loads(value)
 
 
 def run_id(value):
@@ -166,3 +180,37 @@ def signed_status(value, key):
     if value['image'] and not re.fullmatch(r'[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9/-]+@sha256:[a-f0-9]{64}', value['image']):
         raise ValueError('Invalid image receipt')
     return {'status': value, 'signature': sign({'action': 'runner_status', 'status': value}, key)}
+
+
+def safe_report(report):
+    """Project guest results to bounded numeric/status fields; discard all raw output."""
+    result={k:report.get(k) for k in ['schema_version','repository','commit','source_sha256','profile_sha256',
+                                    'artifact_sha256','image','error_code']}
+    if type(result['schema_version']) is not int or result['schema_version'] != 1:
+        raise ValueError('Unsupported report')
+    if not isinstance(result['error_code'],str) or not re.fullmatch(r'[a-z0-9_]{0,60}',result['error_code']):
+        raise ValueError('Unsafe error code')
+    result['tests']={}
+    for name in ['passed','failed','skipped','total']:
+        count=report.get('tests',{}).get(name)
+        if type(count) is not int or not 0 <= count <= 1000000:
+            raise ValueError('Invalid test count')
+        result['tests'][name]=count
+    result['scans']={}
+    for name in ['source','dependencies','secrets']:
+        scan=report.get('scans',{}).get(name,{})
+        if scan.get('status') not in ['passed','failed','not_run']:
+            raise ValueError('Invalid scan state')
+        result['scans'][name]={'status':scan['status']}
+        for field in ['findings','reviewed_findings','total_findings']:
+            if field not in scan and field!='findings':
+                continue
+            count=scan.get(field)
+            if type(count) is not int or not 0 <= count <= 1000000:
+                raise ValueError('Invalid finding count')
+            result['scans'][name][field]=count
+        if 'reviewed_findings' in scan and (scan.get('total_findings') != scan['reviewed_findings']+scan['findings']):
+            raise ValueError('Inconsistent reviewed finding counts')
+    image_scan=report.get('image_scan',{})
+    result['image_scan']={k:image_scan.get(k) for k in ['status','high','critical']}
+    return result

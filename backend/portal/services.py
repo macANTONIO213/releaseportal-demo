@@ -39,7 +39,7 @@ def validate_evidence(evidence, commit, repository=None):
         if scan.get('status') != 'passed' or scan.get('findings') != 0:
             raise RuleError('scan_incomplete', 'Required scans must complete with no blocking findings.')
     artifact = evidence.get('artifact', {})
-    if artifact.get('name') != 'source.tar.gz' or not valid_sha(artifact.get('sha256'), 64):
+    if artifact.get('name') not in ['source.tar.gz','release.tar.gz'] or not valid_sha(artifact.get('sha256'), 64):
         raise RuleError('invalid_artifact', 'Artifact identity is invalid.')
     if type(artifact.get('bytes')) is not int or not 0 < artifact['bytes'] <= 100 * 1024 * 1024:
         raise RuleError('invalid_artifact', 'Artifact size is outside the pilot limit.')
@@ -75,8 +75,12 @@ def prepare_release(run_id, actor):
         'email_ai': 'Disabled', 'recovery': 'Stop on uncertain result; reconcile recorded resources before retry.'}
     from django.conf import settings
     if settings.AUTH_MODE == 'github':
-        from .deployment import plan as direct_plan
-        plan.update(direct_plan(run))
+        from . import remote_delivery
+        if remote_delivery.configured():
+            plan=remote_delivery.release_plan(run)
+        else:
+            from .deployment import plan as direct_plan
+            plan.update(direct_plan(run))
     release = Release.objects.create(run=run, creator=actor, plan=plan, plan_digest=digest(plan), artifact_sha256=run.artifact_sha256)
     record(actor, 'release_prepared', release.id, plan_digest=release.plan_digest)
     return release
@@ -111,7 +115,8 @@ def decide(release_id, actor, approve):
     check_binding(release)
     release.status = 'approved' if approve else 'rejected'
     release.approver, release.approved_at = actor, timezone.now()
-    release.approval_expires_at = timezone.now() + timedelta(hours=8) if approve else None
+    from . import remote_delivery
+    release.approval_expires_at = timezone.now() + (timedelta(minutes=30) if remote_delivery.configured() else timedelta(hours=8)) if approve else None
     release.save()
     record(actor, 'release_approved' if approve else 'release_rejected', release.id, plan_digest=release.plan_digest)
     return release

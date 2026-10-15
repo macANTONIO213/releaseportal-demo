@@ -161,7 +161,8 @@ class PrivateServer(ThreadingHTTPServer):
 class PrivateClient:
     def __init__(self, private_ip, certificate):
         ip = private_ipv4(private_ip)
-        context = ssl.create_default_context(cafile=str(certificate))
+        context = (ssl.create_default_context(cadata=certificate) if str(certificate).startswith('-----BEGIN CERTIFICATE-----')
+                   else ssl.create_default_context(cafile=str(certificate)))
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         # SSL verifies both pinned certificate trust and its private-IP SAN.
         self.url = 'https://' + str(ip) + ':9443'
@@ -183,3 +184,18 @@ class PrivateClient:
                 return strict_json(response.read(MAX_BODY + 1))
         except Exception:
             raise RuleError('controller_outcome_unknown', 'Read the controller receipt before another deployment attempt.') from None
+
+    def ready(self,key):
+        """Verified private TLS + signed read, with no AWS request or credential entry."""
+        request=urllib.request.Request(self.url+'/v1/receipt',data=canonical(status_query(str(uuid.uuid4()),key)),
+            method='POST',headers={'Content-Type':'application/json'})
+        try:
+            self.opener.open(request,timeout=10).close()
+        except urllib.error.HTTPError as error:
+            try:
+                return error.code==404 and strict_json(error.read(MAX_BODY+1))=={'code':'receipt_not_found'}
+            except Exception:
+                return False
+        except Exception:
+            return False
+        return False

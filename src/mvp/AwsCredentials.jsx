@@ -5,7 +5,7 @@ export default function AwsCredentials({ release, configured, perform }) {
   const [confirmed, setConfirmed] = useState(false);
   const secure = globalThis.location?.protocol === 'https:';
   if (!configured) return <p className="mvp-warning">The update template must be reviewed and enabled before credential entry. No AWS values are requested yet.</p>;
-  if (!secure) return <p className="mvp-warning">Open the approved VPN-only HTTPS endpoint to enter AWS credentials. This local HTTP view cannot accept them.</p>;
+  if (!secure) return <p className="mvp-warning">Open the approved HTTPS endpoint to enter AWS credentials. This local HTTP view cannot accept them.</p>;
   return <form autoComplete="off" onSubmit={async event => {
     event.preventDefault();
     if (pending || !confirmed) return;
@@ -27,7 +27,7 @@ export default function AwsCredentials({ release, configured, perform }) {
     <h3>Temporary AWS access for this deployment</h3>
     <p>Paste the three values from the approved account's access page. They are held only for this attempt and never saved in release records.</p>
     {[['access_key_id','AWS access key ID'],['secret_access_key','AWS secret access key'],['session_token','AWS session token']].map(([name,title]) => <label className="field" key={name}>{title}<input name={name} type="password" required autoComplete="off" spellCheck={false} maxLength={name === 'session_token' ? 12000 : 100} data-1p-ignore="true" /></label>)}
-    <label className="mvp-check"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />I reviewed the exact operations and obtained these credentials for account {release.plan.account}.</label>
+    <label className="mvp-check"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />I reviewed the exact operations and obtained these credentials for account {release.plan.target?.account || release.plan.account}.</label>
     <p className="mvp-help">The selected target is not independent proof of credential identity. No background STS or permission probes run. Expiry or worker restart requires fresh values.</p>
     <button className="btn primary" disabled={!confirmed || pending}>{pending ? 'Starting deployment…' : 'Deploy the reviewed artifact'}</button>
   </form>;

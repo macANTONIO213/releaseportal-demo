@@ -73,11 +73,24 @@ completed rollout and HTTPS health. Private object/queue adapters accept closed
 job schemas and bounded artifacts. The COPY-only assembler verifies source,
 dependency and migration hashes; it never runs a repository Dockerfile.
 
-These components are not connected to the live request/worker paths. The new
-scanner recipe and upstream runtime pins have not passed a Linux build or
-isolation acceptance. Local source scanning also has findings awaiting explicit
-review; startup guards remain unchanged. Do not interpret passing contract tests
-as a completed deployment or enable these drafts by changing an environment flag.
+The remote adapter connects run submission, signed evidence, release review and
+private controller receipts. An operator-installed configuration must bind the
+exact repository/profile and actual acceptance receipts before features appear.
+Deployment additionally requires a real successful sign-in by an approved
+independent reviewer and a certificate-verified signed private controller read.
+Legacy startup guards remain unchanged. Linux image, isolation and integration
+acceptance are still required; local contract tests do not prove deployment.
 
-Source normalization omits only the exact reviewed blank `.env.example` template.
+The trusted dispatcher uses a runsc sandbox, a fixed registry proxy, durable
+claims and bounded output. Scanner tools and package-manager inputs are pinned
+and installed from hash-verified inputs. Source and secret findings retain their
+raw counts; reviewed false positives require exact file/finding matches in the
+operator profile. Repository suppression comments do not disable these scans.
+
+A personally owned GitHub App must be public for other users to authorize it.
+A 404 at GitHub's authorization URL can indicate a private App; the App owner
+can change its visibility in Advanced settings. The portal's numeric allowlist
+and repository permission checks continue to apply.
+
+Source normalization permits only the exact reviewed blank `.env.example` template.
 A changed template, actual `.env`, key, PEM or database file remains rejected.

@@ -10,13 +10,16 @@ RUN sed -i 's|http://|https://|g' /etc/apk/repositories \
     && mkdir /tools /input /output /work
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY runtime/pnpm-11.25.0.tgz /tools/pnpm.tgz
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-    && npm install --global --ignore-scripts pnpm@11.25.0
-COPY ci/tools.lock.txt /tools/tools.lock.txt
-RUN pip install --no-cache-dir --only-binary=:all: -r /tools/tools.lock.txt
-COPY ci/releaseportal_pipeline.py ci/releaseportal_test_runner.py /tools/
+    && npm install --global --offline --ignore-scripts --no-audit --no-fund /tools/pnpm.tgz
+COPY ci/releaseportal-tools.lock.txt /tools/tools.lock.txt
+COPY runner-wheels /tools/wheels
+RUN pip install --no-cache-dir --no-index --find-links=/tools/wheels --require-hashes --only-binary=:all: -r /tools/tools.lock.txt
+COPY ci/releaseportal_pipeline.py ci/releaseportal_test_runner.py ci/releaseportal_run_tests.py /tools/
 COPY ci/releaseportal-profile.example.json /tools/releaseportal-profile.json
+COPY ci/bandit.ini /tools/bandit.ini
 USER 10001:10001
 WORKDIR /work
 ENTRYPOINT ["python", "/tools/releaseportal_pipeline.py"]
