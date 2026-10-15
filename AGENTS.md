@@ -1,5 +1,13 @@
 # Demo workspace instructions
 
+15 October 2026 continuation: the user selected this repository for the first
+pipeline and updates to its existing personal portal. The user nominated
+mac-aequilbri and confirmed a different person owns the reviewer account. Retain
+independent review, source/artifact/image binding and exact runtime preservation.
+Prepared ReleasePortal pipeline and ECS plan contracts remain disabled until
+reviewed external worker/controller/storage integrations pass acceptance. No
+source example profile or local test result authorizes new cloud execution.
+
 15 October 2026: user chose owner sign-in first for macANTONIO213, with release
 approval unavailable until an independent reviewer is assigned. Explicit
 PORTAL_OWNER_SIGNIN_ONLY permits only approved GitHub ID284642046, no reviewers;

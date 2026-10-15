@@ -28,11 +28,11 @@ pnpm run test:sites
 
 ## Demo boundaries
 
-The approved initial owner launch uses `PORTAL_OWNER_SIGNIN_ONLY=1` with only
-GitHub user ID284642046 (macANTONIO213) and no reviewer IDs. It retains real GitHub
-App sign-in, public HTTPS and PostgreSQL requirements. Release approval remains
-unavailable, including for stored users with a former reviewer role. Assign an
-independent reviewer and turn off this mode before enabling release review.
+Public pilot users and reviewers are configured by numeric GitHub identity.
+The initial owner-only launch remains available through `PORTAL_OWNER_SIGNIN_ONLY=1`.
+A reviewed two-person configuration disables owner-only mode, allowlists both
+identities and assigns only the independent reviewer ID. Self-approval remains
+blocked; a second account owned by the creator does not provide independent review.
 
 Public hosting requires a real HTTPS hostname, trusted proxy ranges, PostgreSQL with verified TLS, persistent artifact storage, GitHub App configuration and approved numeric developer/reviewer identities. GitHub CLI authentication used to publish this repository is separate from the GitHub App authorization used by portal users.
 
@@ -48,3 +48,19 @@ Repository execution requires a reviewed Linux sandbox and restricted egress. Th
 AWS application deployment is disabled at startup even if its environment flags are set. The retained deployment script path contains only a failing stub. Do not treat the test adapter, mock receipts or successful local tests as a live deployment. A new target and deployment adapter must be reviewed separately. The Docker default is shared/pilot mode and deliberately refuses startup until its required configuration is supplied; use the local setup above for local development.
 
 Do not upload `.venv`, `node_modules`, `dist`, runtime files, `.env` files, authentication caches or generated archives. No license has been assigned by this preparation; choose one only if you have authority to license the code. Nothing in this folder proves production acceptance or authorizes cloud provisioning.
+
+## Execution enablement in preparation
+
+`ci/releaseportal_pipeline.py` is a ReleasePortal-specific sandbox pipeline draft,
+with backend/frontend checks, scans, bounded numeric reports and artifact hashes.
+Its example profile is disabled. It must run only in a reviewed isolated runner;
+no runner image, private dispatcher/storage or deployment controller is enabled
+by adding these files. The pipeline is not yet accepted on Linux.
+
+`backend/portal/ecs_release.py` provides pure evidence/approval/image-update
+contracts; it does not execute AWS calls or bypass startup deployment guards.
+The existing-service adapter will preserve runtime configuration and exclude
+schema/dependency changes until a new profile is reviewed. Public execution
+flags remain blocked until the additional infrastructure and integration are
+implemented, approved and accepted. Do not flip environment flags to skip that
+work.

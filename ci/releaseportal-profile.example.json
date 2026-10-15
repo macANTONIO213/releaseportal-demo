@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "name": "releaseportal-v1",
+  "repository": "macANTONIO213/releaseportal-demo",
+  "implementation_status": "prepared_profile_only_not_an_active_runner",
+  "runtime": {
+    "python": "3.12",
+    "node": "22",
+    "pnpm": "11.25.0",
+    "sandbox": "runsc",
+    "concurrency": 1
+  },
+  "source_lock_sha256": {
+    "backend/requirements.lock.txt": "86d418edc28287cdf9636d38595f69ecd4142ac20ff45a4515bc00ea32b0443f",
+    "pnpm-lock.yaml": "ecd4e1f3346ddec76f14f99fa8745baa7b203559b47dce71546f6505b3db8447",
+    "package.json": "4acaf6c87c6fe74df641b5a15ea920f8ba6ad5f376191c3104be16f0565cdf3a"
+  },
+  "migration_manifest_sha256": "e1352ca5af61afdb1cd801d233bb97eb77496c3ce8bc116b1b7aeadbe70e0557",
+  "required_stages": [
+    "source_scan",
+    "python_dependency_scan",
+    "frontend_dependency_scan",
+    "secret_scan",
+    "django_checks",
+    "django_tests",
+    "frontend_build",
+    "sites_packaging_tests",
+    "artifact_integrity",
+    "image_vulnerability_gate"
+  ],
+  "django_manage": "backend/manage.py",
+  "django_settings": "config.settings",
+  "test_environment": {
+    "PORTAL_MODE": "local",
+    "PORTAL_RUNTIME_DIR": "/work/runtime",
+    "AWS_EC2_METADATA_DISABLED": "true"
+  },
+  "frontend_build": [
+    "pnpm",
+    "run",
+    "build"
+  ],
+  "frontend_tests": [
+    "pnpm",
+    "run",
+    "test:sites"
+  ],
+  "execution_enabled": false,
+  "deployment_scope": "existing ECS service image only; lockfile or migration changes require a newly reviewed profile"
+}
