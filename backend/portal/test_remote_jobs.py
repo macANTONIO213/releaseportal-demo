@@ -61,6 +61,23 @@ class RemoteJobsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             web.call('sts','get-caller-identity',{})
 
+    def test_streaming_object_read_uses_cli_supported_flags_and_cannot_change_owner(self):
+        calls=[]
+        def fake(args,**kwargs):
+            calls.append(args)
+            return SimpleNamespace(returncode=0,stdout='{}',stderr='')
+        cli=RoleCLI('/usr/local/bin/aws','ap-southeast-1','worker',run=fake)
+        cli.call('s3api','get-object',{'Bucket':'fixture-bucket','Key':'runs/fixture/status.json',
+            'ExpectedBucketOwner':'111122223333'},output='/tmp/fixture-output')
+        command=calls[0]
+        self.assertNotIn('--cli-input-json',command)
+        self.assertNotIn('--no-cli-pager',command)
+        self.assertEqual(command[-1],'/tmp/fixture-output')
+        self.assertEqual(command[command.index('--expected-bucket-owner')+1],'111122223333')
+        with self.assertRaises(ValueError):
+            cli.call('s3api','get-object',{'Bucket':'fixture-bucket','Key':'fixture','Endpoint':'other'},output='/tmp/fixture-output')
+        self.assertEqual(len(calls),1)
+
     def test_objects_are_private_prefix_bound_verified_and_use_file_body(self):
         content=b'fixture compiled artifact'
         class CLI:

@@ -77,8 +77,17 @@ class RoleCLI:
     def call(self, service, operation, params, output=None, body=None):
         if operation not in self.OPERATIONS.get(service, set()):
             raise ValueError('Unapproved workload operation')
-        args = [self.executable, service, operation, '--region', self.region, '--output', 'json',
-                '--no-cli-pager', '--cli-input-json', json.dumps(params, separators=(',', ':'))]
+        # AWS_PAGER is disabled in the child environment. --no-cli-pager is
+        # v2-only; the isolated web workload uses the pinned v1 CLI.
+        args = [self.executable, service, operation, '--region', self.region, '--output', 'json']
+        if (service,operation)==('s3api','get-object'):
+            # Streaming-output commands do not support --cli-input-json.
+            if set(params)!={'Bucket','Key','ExpectedBucketOwner'} or output is None:
+                raise ValueError('Explicit bounded object read required')
+            args.extend(['--bucket',params['Bucket'],'--key',params['Key'],
+                         '--expected-bucket-owner',params['ExpectedBucketOwner']])
+        else:
+            args.extend(['--cli-input-json',json.dumps(params,separators=(',', ':'))])
         if output is not None:
             if (service, operation) != ('s3api', 'get-object'):
                 raise ValueError('Unexpected output file')
