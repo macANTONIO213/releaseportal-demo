@@ -67,15 +67,17 @@ class RemoteJobsTests(unittest.TestCase):
             calls.append(args)
             return SimpleNamespace(returncode=0,stdout='{}',stderr='')
         cli=RoleCLI('/usr/local/bin/aws','ap-southeast-1','worker',run=fake)
+        temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
+        output=str(Path(temporary.name)/'fixture-output')
         cli.call('s3api','get-object',{'Bucket':'fixture-bucket','Key':'runs/fixture/status.json',
-            'ExpectedBucketOwner':'111122223333'},output='/tmp/fixture-output')
+            'ExpectedBucketOwner':'111122223333'},output=output)
         command=calls[0]
         self.assertNotIn('--cli-input-json',command)
         self.assertNotIn('--no-cli-pager',command)
-        self.assertEqual(command[-1],'/tmp/fixture-output')
+        self.assertEqual(command[-1],output)
         self.assertEqual(command[command.index('--expected-bucket-owner')+1],'111122223333')
         with self.assertRaises(ValueError):
-            cli.call('s3api','get-object',{'Bucket':'fixture-bucket','Key':'fixture','Endpoint':'other'},output='/tmp/fixture-output')
+            cli.call('s3api','get-object',{'Bucket':'fixture-bucket','Key':'fixture','Endpoint':'other'},output=output)
         self.assertEqual(len(calls),1)
 
     def test_objects_are_private_prefix_bound_verified_and_use_file_body(self):
