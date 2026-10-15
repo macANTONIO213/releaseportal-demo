@@ -36,6 +36,13 @@ independent reviewer and turn off this mode before enabling release review.
 
 Public hosting requires a real HTTPS hostname, trusted proxy ranges, PostgreSQL with verified TLS, persistent artifact storage, GitHub App configuration and approved numeric developer/reviewer identities. GitHub CLI authentication used to publish this repository is separate from the GitHub App authorization used by portal users.
 
+The public launcher explicitly retains Waitress's `X-Forwarded-Proto` header.
+It clears other proxy headers and preserves the original socket peer so ingress
+middleware can enforce the configured ALB subnet ranges. The hosting security
+group must admit the application port only from its dedicated HTTPS ALB.
+Default Waitress header filtering would otherwise remove the scheme header and
+cause valid HTTPS requests to fail the application's ingress check.
+
 Repository execution requires a reviewed Linux sandbox and restricted egress. The retained pipeline is a Django-layout draft, not a universal build system. Browser cookies are never reused as API credentials. Password and legacy CI modules remain for compatibility tests; the active frontend uses GitHub authorization.
 
 AWS application deployment is disabled at startup even if its environment flags are set. The retained deployment script path contains only a failing stub. Do not treat the test adapter, mock receipts or successful local tests as a live deployment. A new target and deployment adapter must be reviewed separately. The Docker default is shared/pilot mode and deliberately refuses startup until its required configuration is supplied; use the local setup above for local development.

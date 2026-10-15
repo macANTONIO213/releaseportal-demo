@@ -10,4 +10,11 @@ from django.conf import settings
 host = os.environ.get('PORTAL_BIND_HOST', '127.0.0.1')
 if settings.LOCAL and host != '127.0.0.1':
     raise SystemExit('Local authentication may only be served on loopback.')
-serve(application, host=host, port=int(os.environ.get('PORTAL_PORT', '8055')), threads=4)
+proxy_options = {}
+if settings.PUBLIC:
+    # IngressMiddleware checks the original socket peer against approved ALB
+    # subnets; the task security group admits only its ALB. Retain only the
+    # scheme header, leaving REMOTE_ADDR unchanged and other proxy headers cleared.
+    proxy_options = {'trusted_proxy': '*', 'trusted_proxy_headers': {'x-forwarded-proto'},
+                     'clear_untrusted_proxy_headers': True}
+serve(application, host=host, port=int(os.environ.get('PORTAL_PORT', '8055')), threads=4, **proxy_options)
